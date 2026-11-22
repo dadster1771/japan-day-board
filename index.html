@@ -129,22 +129,30 @@ nav.tabs{background:var(--paper)}
   line-height:1.25;white-space:nowrap}
 .rfoot a:active{background:var(--plan-br)}
 
-/* shading swatches */
-.mkbar{display:inline-flex;gap:4px;margin-right:8px}
-.mkbtn{width:25px;height:25px;border-radius:50%;border:2px solid;position:relative}
-.mkbtn.mk-g{background:#cfe9d8;border-color:#56a179}
-.mkbtn.mk-y{background:#f7e9bd;border-color:#c9a33c}
-.mkbtn.mk-r{background:#f8d5c7;border-color:#cf7b5b}
-.mkbtn.on::after{content:"";position:absolute;inset:4px;border-radius:50%;background:currentColor}
-.mkbtn.mk-g.on{color:#2a7c4f}
-.mkbtn.mk-y.on{color:#9b7a16}
-.mkbtn.mk-r.on{color:#b2502c}
+/* drag handle */
+.grab{flex:0 0 34px;display:flex;align-items:flex-start;justify-content:center;
+  padding-top:12px;font-size:19px;line-height:1;color:var(--line2);
+  cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.grab:active{cursor:grabbing;color:var(--ink2)}
+.row.dragging{box-shadow:0 8px 22px rgba(28,38,46,.22);border-radius:10px;
+  background:var(--card);opacity:.97}
+.row.drop-above{box-shadow:inset 0 3px 0 0 var(--plan-fg)}
+.row.drop-below{box-shadow:inset 0 -3px 0 0 var(--plan-fg)}
+body.dragging-now{user-select:none;-webkit-user-select:none}
+body.dragging-now .rmain{pointer-events:none}
 
-/* reorder */
-.mvbar{display:inline-flex;gap:3px;margin-right:8px}
-.mvbtn{width:25px;height:25px;border-radius:7px;border:1px solid var(--line2);
-  background:var(--card);font-size:10px;color:var(--ink2);line-height:1}
-.mvbtn:active{background:var(--ground)}
+/* shading, inside the card only: the itinerary is locked in, picks are not */
+.shadepick{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+.shadepick .cap{font-size:11.5px;color:var(--ink3);margin-bottom:7px}
+.shaderow{display:flex;gap:7px}
+.shbtn{flex:1;min-height:46px;border-radius:11px;font-size:13px;font-weight:700;
+  border:2px solid;padding:6px 4px;line-height:1.2}
+.shbtn.sh-g{background:#e8f5ed;border-color:#9ccfb1;color:#1d5e39}
+.shbtn.sh-y{background:#fcf5de;border-color:#ddc27a;color:#7a5a06}
+.shbtn.sh-r{background:#fceae1;border-color:#e8ab8e;color:#8f3f22}
+.shbtn.sh-g.on{background:#2a7c4f;border-color:#2a7c4f;color:#fff}
+.shbtn.sh-y.on{background:#9b7a16;border-color:#9b7a16;color:#fff}
+.shbtn.sh-r.on{background:#b2502c;border-color:#b2502c;color:#fff}
 
 /* shaded rows */
 .row.sh-g{background:#e8f5ed}
@@ -177,10 +185,14 @@ nav.tabs{background:var(--paper)}
 .row.sub .rmain{padding-left:38px}
 .row.trans .rname,.row.note .rname{font-weight:400;color:var(--ink2);font-size:14px}
 .rmeta{font-size:12.5px;color:var(--ink3);margin-top:3px}
-.rnear{display:block;font-size:12px;color:var(--ink2);margin-top:5px;
-  background:var(--ground);border-radius:8px;padding:5px 8px;line-height:1.35}
+.rnear{display:block;font-size:12px;color:var(--ink2);margin-top:6px;
+  background:var(--ground);border-radius:9px;padding:7px 9px;line-height:1.4}
+.rnear .nh{display:block;font-size:10.5px;color:var(--ink3);font-weight:700;
+  margin-bottom:3px}
+.rnear .nr{display:flex;align-items:baseline;gap:6px;margin-top:2px}
+.rnear .ni{flex:0 0 14px;color:var(--ink3);font-size:10.5px;font-weight:700}
 .rnear b{color:var(--ink)}
-.rnear .dd{color:var(--ink3)}
+.rnear .dd{color:var(--ink3);margin-left:auto;white-space:nowrap;font-size:11px}
 .rdist{flex:0 0 auto;text-align:right;font-size:12.5px;color:var(--ink2);font-weight:700;
   margin-top:2px;line-height:1.35;white-space:nowrap}
 .rdist i{display:block;font-style:normal;font-weight:400;color:var(--ink3);font-size:11px}
@@ -581,13 +593,10 @@ function stopRow(s, idx){
   if(anchored){ mk = "me"; glyph = "◉"; }
   const det = (s.details || []).length
     ? `<ul class="details">${s.details.map(d => `<li>${esc(d)}</li>`).join("")}</ul>` : "";
-  const linked = s.poolkey ? SPOT_BY_KEY.get(s.poolkey) : null;
+  // No votes and no shading on itinerary rows: these are locked in, we are doing them.
   const meta = metaLine([s.cat], s.lat == null && s.kind === "stop");
-  const chips = linked
-    ? voteChips(linked).map(c => `<span class="vc ${c[0]}">${esc(c[1])}</span>`).join("")
-    : "";
-  const sh = markOf(s.id) ? " sh-" + markOf(s.id) : "";
-  return `<div class="row ${cls}${sub}${anchored}${sh}">
+  const chips = "";
+  return `<div class="row ${cls}${sub}${anchored}">
     <div class="rtop">
       <button class="rmain" data-stop="${esc(s.id)}">
         <span class="marker ${mk}">${glyph}</span>
@@ -601,7 +610,7 @@ function stopRow(s, idx){
       </button>
       <button class="rx" data-del="${esc(s.id)}" aria-label="Take off the board">✕</button>
     </div>
-    ${rowFoot(s)}
+    <div class="rfoot">${linkBar(s)}</div>
   </div>`;
 }
 
@@ -609,20 +618,10 @@ function stopRow(s, idx){
    search links and simply fail to load when there is no signal. */
 const MARKS = [["g","doing it"],["y","undecided"],["r","not keen"]];
 
-function markBar(id){
-  const cur = markOf(id);
-  return `<span class="mkbar">${
-    MARKS.map(([k,label]) =>
-      `<button class="mkbtn mk-${k}${cur===k?" on":""}" data-mark="${k}" data-mid="${esc(id)}"
-         aria-label="${esc(label)}" title="${esc(label)}"></button>`).join("")
-  }</span>`;
-}
-
 function moveBar(dayN, id){
-  return `<span class="mvbar">
-    <button class="mvbtn" data-move="up" data-mday="${dayN}" data-mid="${esc(id)}" aria-label="Move up">▲</button>
-    <button class="mvbtn" data-move="down" data-mday="${dayN}" data-mid="${esc(id)}" aria-label="Move down">▼</button>
-  </span>`;
+  // a handle you grab and drag, rather than tapping an arrow repeatedly
+  return `<span class="grab" data-grab="${esc(id)}" data-gday="${dayN}"
+     aria-label="Drag to reorder" title="Drag to reorder">⠿</span>`;
 }
 
 function linkBar(it){
@@ -638,10 +637,8 @@ function linkBar(it){
 }
 
 /* the strip under each row: shading, optional reorder, then the search links */
-function rowFoot(it, opts){
-  opts = opts || {};
-  const mv = opts.dayN ? moveBar(opts.dayN, it.id) : "";
-  return `<div class="rfoot">${markBar(it.id)}${mv}${linkBar(it)}</div>`;
+function rowFoot(it){
+  return `<div class="rfoot">${linkBar(it)}</div>`;
 }
 
 function goneRow(item){
@@ -664,27 +661,40 @@ function goneSection(items){
 /* Which itinerary stop is this pick closest to, anywhere in the trip?
    Answers "when does it make sense to do this" without opening anything. */
 const NEAREST_STOP = new Map();
-function nearestStop(p){
-  if(p.lat == null) return null;
+const NEAR_MAX_MIN = 60;    // an hour out, past that it is a different day's problem
+const NEAR_SHOW = 4;
+
+function nearestStops(p){
+  if(p.lat == null) return [];
   if(NEAREST_STOP.has(p.id)) return NEAREST_STOP.get(p.id);
-  let best = null;
+  const hits = [];
   for(const d of DAYS){
-    for(const s of d.stops){
-      if(s.lat == null || s.kind === "note") continue;
-      if(s.poolkey && s.poolkey === p.key) continue;     // it IS this place
-      const m = metres(p, s);
+    for(const st of d.stops){
+      if(st.lat == null || st.kind === "note") continue;
+      if(st.poolkey && st.poolkey === p.key) continue;    // it IS this place
+      const m = metres(p, st);
       if(m == null) continue;
-      if(!best || m < best.m) best = {m, name:s.name, day:d.n};
+      if(walkMin(m) > NEAR_MAX_MIN) continue;             // too far to be useful
+      hits.push({m, name: st.name, day: d.n});
     }
   }
-  NEAREST_STOP.set(p.id, best);
-  return best;
+  hits.sort((a, b) => a.m - b.m);
+  const out = hits.slice(0, NEAR_SHOW);
+  NEAREST_STOP.set(p.id, out);
+  return out;
 }
+
 function nearestStopLine(p){
-  const n = nearestStop(p);
-  if(!n) return "";
-  return `<span class="rnear">closest stop: <b>${esc(n.name)}</b>
-    <span class="dd">day ${n.day} · ${esc(travelLabel(n.m))} · ${esc(distLabel(n.m))}</span></span>`;
+  const list = nearestStops(p);
+  if(!list.length) return "";
+  return `<span class="rnear">
+    <span class="nh">Closest stops on the itinerary</span>
+    ${list.map((n, i) => `<span class="nr">
+      <span class="ni">${i + 1}</span>
+      <b>${esc(n.name)}</b>
+      <span class="dd">day ${n.day} · ${esc(travelLabel(n.m))} · ${esc(distLabel(n.m))}</span>
+    </span>`).join("")}
+  </span>`;
 }
 
 function pickRow(s, opts){
@@ -697,7 +707,8 @@ function pickRow(s, opts){
   const anchored = state.anchor && state.anchor.ref === s.id ? " anchored" : "";
   const meta = metaLine([s.area, s.city, s.cat], s.lat == null);
   const sh = markOf(s.id) ? " sh-" + markOf(s.id) : "";
-  return `<div class="row${anchored}${sh}">
+  return `<div class="row${anchored}${sh}" data-rowid="${esc(s.id)}"
+      ${opts.reorderDay ? `data-rowday="${opts.reorderDay}"` : ""}>
     <div class="rtop">
       <button class="rmain" data-pick="${esc(s.id)}">
         <span class="marker ${anchored?"me":markerClass(s)}">${anchored?"◉":"★"}</span>
@@ -709,9 +720,10 @@ function pickRow(s, opts){
         </span>
         ${distCell(s)}
       </button>
+      ${opts.reorderDay ? moveBar(opts.reorderDay, s.id) : ""}
       <button class="rx" data-del="${esc(s.id)}" aria-label="Take off the board">✕</button>
     </div>
-    ${rowFoot(s, {dayN: opts.reorderDay})}
+    ${rowFoot(s)}
   </div>`;
 }
 
@@ -1219,6 +1231,13 @@ function openSheet(it, kind){
           <div class="v" style="font-size:13px">${it.lat.toFixed(5)}, ${it.lng.toFixed(5)}</div></div>` : ""}
       </div>
       ${provBlock(it)}
+      ${onPlanDay ? "" : `<div class="shadepick">
+        <div class="cap">How keen are we?</div>
+        <div class="shaderow">
+          ${MARKS.map(([k,label]) => `<button class="shbtn sh-${k}${markOf(it.id)===k?" on":""}"
+             data-mark="${k}" data-mid="${esc(it.id)}">${esc(label)}</button>`).join("")}
+        </div>
+      </div>`}
       <div class="btns">
         ${it.lat != null ? `<button class="btn primary" id="setAnchor">◉ I'm here, measure from this</button>` : ""}
         ${isGone(it.id)
@@ -1290,6 +1309,96 @@ function startGps(){
     render();
   }, {enableHighAccuracy:true, timeout:60000, maximumAge:15000});
 }
+
+/* ---------------------------------------------------------------- dragging
+   Grab the ⠿ handle and pull. Pointer events, not HTML5 drag-and-drop, because
+   the latter does not work by touch on iOS. The row follows your finger and the
+   others slide out of the way; letting go writes the new order. */
+(function(){
+  let drag = null;
+
+  function rowsFor(dayN){
+    return [...document.querySelectorAll(`.row[data-rowday="${dayN}"]`)];
+  }
+
+  function start(e){
+    const h = e.target.closest("[data-grab]");
+    if(!h) return;
+    const row = h.closest(".row");
+    if(!row) return;
+    const dayN = +h.dataset.gday;
+    const siblings = rowsFor(dayN);
+    if(siblings.length < 2) return;
+
+    e.preventDefault();
+    const rect = row.getBoundingClientRect();
+    drag = {
+      id: h.dataset.grab, dayN, row, siblings,
+      startY: e.clientY, offset: e.clientY - rect.top,
+      height: rect.height, moved: false,
+      order: siblings.map(r => r.dataset.rowid),
+    };
+    row.classList.add("dragging");
+    row.style.position = "relative";
+    row.style.zIndex = "20";
+    document.body.classList.add("dragging-now");
+    h.setPointerCapture && h.setPointerCapture(e.pointerId);
+  }
+
+  function move(e){
+    if(!drag) return;
+    e.preventDefault();
+    const dy = e.clientY - drag.startY;
+    if(Math.abs(dy) > 3) drag.moved = true;
+    drag.row.style.transform = `translateY(${dy}px)`;
+
+    // where would it land?
+    const mid = drag.row.getBoundingClientRect().top + drag.height / 2;
+    let target = null;
+    for(const r of drag.siblings){
+      if(r === drag.row) continue;
+      const b = r.getBoundingClientRect();
+      if(mid > b.top && mid < b.bottom){ target = r; break; }
+    }
+    for(const r of drag.siblings) if(r !== drag.row) r.classList.remove("drop-above","drop-below");
+    if(target){
+      const b = target.getBoundingClientRect();
+      target.classList.add(mid < b.top + b.height / 2 ? "drop-above" : "drop-below");
+    }
+  }
+
+  function end(e){
+    if(!drag) return;
+    const d = drag; drag = null;
+    d.row.classList.remove("dragging");
+    d.row.style.transform = d.row.style.position = d.row.style.zIndex = "";
+    document.body.classList.remove("dragging-now");
+
+    let target = null, before = false;
+    for(const r of d.siblings){
+      if(r === d.row) continue;
+      if(r.classList.contains("drop-above")){ target = r; before = true; }
+      if(r.classList.contains("drop-below")){ target = r; before = false; }
+      r.classList.remove("drop-above","drop-below");
+    }
+    if(!d.moved || !target) return;
+
+    const order = d.order.slice();
+    const from = order.indexOf(d.id);
+    order.splice(from, 1);
+    let to = order.indexOf(target.dataset.rowid);
+    if(!before) to += 1;
+    order.splice(to, 0, d.id);
+    ORDER[d.dayN] = order;
+    saveOrder();
+    render();
+  }
+
+  document.addEventListener("pointerdown", start, {passive:false});
+  document.addEventListener("pointermove", move, {passive:false});
+  document.addEventListener("pointerup", end);
+  document.addEventListener("pointercancel", end);
+})();
 
 /* ---------------------------------------------------------------- wiring */
 function render(){
