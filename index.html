@@ -114,9 +114,19 @@ nav.tabs{
 .sechead .n{font-size:12px;color:var(--ink3);font-weight:700}
 
 /* ---------------------------------------------------------------- rows */
-.row{display:flex;align-items:stretch;width:100%;border-top:1px solid var(--line)}
+.row{display:flex;flex-direction:column;width:100%;border-top:1px solid var(--line)}
 .row:first-child{border-top:0}
 .row.anchored{background:var(--me-bg)}
+.rtop{display:flex;align-items:stretch;width:100%}
+/* the doc prints "Google · TikTok · YouTube" after each entry, so keep them on
+   the row rather than burying them one tap deeper */
+.rlinks{display:flex;flex-wrap:wrap;align-items:center;gap:2px 0;
+  padding:0 14px 10px 51px;margin-top:-4px}
+.row.sub .rlinks{padding-left:75px}
+.rlinks a{font-size:12px;color:var(--plan-fg);padding:4px 7px;border-radius:7px;
+  background:var(--plan-bg);border:1px solid var(--plan-br);margin-right:5px;
+  line-height:1.2;white-space:nowrap}
+.rlinks a:active{background:var(--plan-br)}
 .rmain{
   display:flex;gap:11px;align-items:flex-start;flex:1;min-width:0;text-align:left;
   padding:12px 4px 12px 14px;min-height:var(--tap);
@@ -495,28 +505,47 @@ function stopRow(s, idx){
     ? voteChips(linked).map(c => `<span class="vc ${c[0]}">${esc(c[1])}</span>`).join("")
     : "";
   return `<div class="row ${cls}${sub}${anchored}">
-    <button class="rmain" data-stop="${esc(s.id)}">
-      <span class="marker ${mk}">${glyph}</span>
-      <span class="rbody">
-        <span class="rname">${esc(s.name)}</span>
-        ${meta ? `<span class="rmeta">${esc(meta)}</span>` : ""}
-        ${chips ? `<span class="chips">${chips}</span>` : ""}
-        ${det}
-      </span>
-      ${distCell(s)}
-    </button>
-    <button class="rx" data-del="${esc(s.id)}" aria-label="Take off the board">✕</button>
+    <div class="rtop">
+      <button class="rmain" data-stop="${esc(s.id)}">
+        <span class="marker ${mk}">${glyph}</span>
+        <span class="rbody">
+          <span class="rname">${esc(s.name)}</span>
+          ${meta ? `<span class="rmeta">${esc(meta)}</span>` : ""}
+          ${chips ? `<span class="chips">${chips}</span>` : ""}
+          ${det}
+        </span>
+        ${distCell(s)}
+      </button>
+      <button class="rx" data-del="${esc(s.id)}" aria-label="Take off the board">✕</button>
+    </div>
+    ${linkBar(s)}
   </div>`;
 }
 
+/* Inline search links. They need the internet, so they are plainly marked as
+   search links and simply fail to load when there is no signal. */
+function linkBar(it){
+  const L = it.links || {};
+  const out = [];
+  if(it.lat != null) out.push(["Maps", mapsHref(it)]);
+  if(L.google)    out.push(["Google", L.google]);
+  if(L.tiktok)    out.push(["TikTok", L.tiktok]);
+  if(L.instagram) out.push(["Instagram", L.instagram]);
+  if(L.youtube)   out.push(["YouTube", L.youtube]);
+  if(!out.length) return "";
+  return `<div class="rlinks">${
+    out.map(l => `<a href="${esc(l[1])}" target="_blank" rel="noopener">${esc(l[0])}</a>`).join("")
+  }</div>`;
+}
+
 function goneRow(item){
-  return `<div class="row gone">
+  return `<div class="row gone"><div class="rtop">
     <button class="rmain" data-open-gone="${esc(item.id)}">
       <span class="marker">↺</span>
       <span class="rbody"><span class="rname">${esc(item.name)}</span></span>
     </button>
     <button class="rx" data-restore="${esc(item.id)}" aria-label="Put it back">↺</button>
-  </div>`;
+  </div></div>`;
 }
 
 function goneSection(items){
@@ -536,16 +565,19 @@ function pickRow(s, opts){
   const anchored = state.anchor && state.anchor.ref === s.id ? " anchored" : "";
   const meta = metaLine([s.area, s.city, s.cat], s.lat == null);
   return `<div class="row${anchored}">
-    <button class="rmain" data-pick="${esc(s.id)}">
-      <span class="marker ${anchored?"me":markerClass(s)}">${anchored?"◉":"★"}</span>
-      <span class="rbody">
-        <span class="rname">${esc(s.name)}</span>
-        <span class="rmeta">${esc(meta)}</span>
-        <span class="chips">${chips}${onPlan}</span>
-      </span>
-      ${distCell(s)}
-    </button>
-    <button class="rx" data-del="${esc(s.id)}" aria-label="Take off the board">✕</button>
+    <div class="rtop">
+      <button class="rmain" data-pick="${esc(s.id)}">
+        <span class="marker ${anchored?"me":markerClass(s)}">${anchored?"◉":"★"}</span>
+        <span class="rbody">
+          <span class="rname">${esc(s.name)}</span>
+          <span class="rmeta">${esc(meta)}</span>
+          <span class="chips">${chips}${onPlan}</span>
+        </span>
+        ${distCell(s)}
+      </button>
+      <button class="rx" data-del="${esc(s.id)}" aria-label="Take off the board">✕</button>
+    </div>
+    ${linkBar(s)}
   </div>`;
 }
 
@@ -1068,6 +1100,14 @@ render();
 if("serviceWorker" in navigator){
   window.addEventListener("load", () =>
     navigator.serviceWorker.register("sw.js").catch(() => {}));
+  /* When a new worker takes over, the page in front of you is the old build.
+     Reload once so an update never leaves you reading a stale itinerary. */
+  let swapped = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if(swapped) return;
+    swapped = true;
+    location.reload();
+  });
 }
 </script>
 </body>
