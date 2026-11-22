@@ -121,13 +121,37 @@ nav.tabs{background:var(--paper)}
 .rtop{display:flex;align-items:stretch;width:100%}
 /* the doc prints "Google · TikTok · YouTube" after each entry, so keep them on
    the row rather than burying them one tap deeper */
-.rlinks{display:flex;flex-wrap:wrap;align-items:center;gap:3px 0;
+.rfoot{display:flex;flex-wrap:wrap;align-items:center;gap:4px 0;
   padding:0 10px 9px 44px;margin-top:-3px}
-.row.sub .rlinks{padding-left:54px}
-.rlinks a{font-size:11px;color:var(--plan-fg);padding:3px 6px;border-radius:6px;
+.row.sub .rfoot{padding-left:54px}
+.rfoot a{font-size:11px;color:var(--plan-fg);padding:3px 6px;border-radius:6px;
   background:var(--plan-bg);border:1px solid var(--plan-br);margin-right:4px;
   line-height:1.25;white-space:nowrap}
-.rlinks a:active{background:var(--plan-br)}
+.rfoot a:active{background:var(--plan-br)}
+
+/* shading swatches */
+.mkbar{display:inline-flex;gap:4px;margin-right:8px}
+.mkbtn{width:25px;height:25px;border-radius:50%;border:2px solid;position:relative}
+.mkbtn.mk-g{background:#cfe9d8;border-color:#56a179}
+.mkbtn.mk-y{background:#f7e9bd;border-color:#c9a33c}
+.mkbtn.mk-r{background:#f8d5c7;border-color:#cf7b5b}
+.mkbtn.on::after{content:"";position:absolute;inset:4px;border-radius:50%;background:currentColor}
+.mkbtn.mk-g.on{color:#2a7c4f}
+.mkbtn.mk-y.on{color:#9b7a16}
+.mkbtn.mk-r.on{color:#b2502c}
+
+/* reorder */
+.mvbar{display:inline-flex;gap:3px;margin-right:8px}
+.mvbtn{width:25px;height:25px;border-radius:7px;border:1px solid var(--line2);
+  background:var(--card);font-size:10px;color:var(--ink2);line-height:1}
+.mvbtn:active{background:var(--ground)}
+
+/* shaded rows */
+.row.sh-g{background:#e8f5ed}
+.row.sh-y{background:#fcf5de}
+.row.sh-r{background:#fceae1}
+.row.sh-g .rname{color:#1d5e39}
+.row.sh-r .rname{color:#8f3f22}
 .rmain{
   display:flex;gap:11px;align-items:flex-start;flex:1;min-width:0;text-align:left;
   padding:12px 4px 12px 14px;min-height:var(--tap);
@@ -153,6 +177,10 @@ nav.tabs{background:var(--paper)}
 .row.sub .rmain{padding-left:38px}
 .row.trans .rname,.row.note .rname{font-weight:400;color:var(--ink2);font-size:14px}
 .rmeta{font-size:12.5px;color:var(--ink3);margin-top:3px}
+.rnear{display:block;font-size:12px;color:var(--ink2);margin-top:5px;
+  background:var(--ground);border-radius:8px;padding:5px 8px;line-height:1.35}
+.rnear b{color:var(--ink)}
+.rnear .dd{color:var(--ink3)}
 .rdist{flex:0 0 auto;text-align:right;font-size:12.5px;color:var(--ink2);font-weight:700;
   margin-top:2px;line-height:1.35;white-space:nowrap}
 .rdist i{display:block;font-style:normal;font-weight:400;color:var(--ink3);font-size:11px}
@@ -239,6 +267,14 @@ svg.map{display:block;width:100%;height:auto;background:
 /* "what else is right here" list, inside the spot card */
 .nearblk{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
 .nearblk .cap{font-size:11.5px;color:var(--ink3);margin-bottom:6px}
+.catchips{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 9px}
+.cc{font-size:11.5px;font-weight:700;padding:5px 9px;border-radius:999px;
+  background:var(--card);border:1px solid var(--line2);color:var(--ink2);min-height:30px}
+.cc.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.prov{font-size:11.5px;color:var(--ink2);background:var(--ground);border-radius:9px;
+  padding:8px 10px;margin-top:10px;line-height:1.45}
+.prov b{color:var(--ink)}
+.prov .warn{color:var(--must-fg);font-weight:700}
 .nearrow{display:flex;align-items:flex-start;gap:10px;width:100%;text-align:left;
   padding:9px 2px;border-top:1px solid var(--line);min-height:44px}
 .nearrow:first-of-type{border-top:0}
@@ -360,6 +396,8 @@ const state = {
   day:1,
   anchor:null,          // {lat,lng,label,sub,kind:'gps'|'spot'}
   filter:"all",
+  nearCat:"",
+  openItem:null,
   gpsWatch:null,
   gpsErr:"",
 };
@@ -389,6 +427,46 @@ function saveGone(){
   try{ localStorage.setItem(LS_GONE, JSON.stringify([...GONE])); }catch(e){}
 }
 function isGone(id){ return GONE.has(id); }
+
+/* ---------------------------------------------------------------- shading
+   Green = we're doing this. Amber = undecided. Red = not keen.
+   Kept separate from removal: shading is the everyday judgement, ✕ is the rare one. */
+const LS_MARK = "jdb.mark.v1";
+let MARK = {};
+try{ MARK = JSON.parse(localStorage.getItem(LS_MARK) || "{}") || {}; }catch(e){}
+function saveMark(){ try{ localStorage.setItem(LS_MARK, JSON.stringify(MARK)); }catch(e){} }
+function markOf(id){ return MARK[id] || ""; }
+function setMark(id, v){
+  if(MARK[id] === v) delete MARK[id]; else MARK[id] = v;   // tapping again clears it
+  saveMark(); render();
+}
+
+/* ---------------------------------------------------------------- ordering
+   Manual order for the "Other yes / maybe" block, per day. Anything not yet
+   moved keeps the document's original order. */
+const LS_ORDER = "jdb.order.v1";
+let ORDER = {};
+try{ ORDER = JSON.parse(localStorage.getItem(LS_ORDER) || "{}") || {}; }catch(e){}
+function saveOrder(){ try{ localStorage.setItem(LS_ORDER, JSON.stringify(ORDER)); }catch(e){} }
+function applyOrder(dayN, ids){
+  const saved = ORDER[dayN];
+  if(!saved || !saved.length) return ids;
+  const pos = new Map(saved.map((id, i) => [id, i]));
+  return ids.slice().sort((a, b) => {
+    const pa = pos.has(a) ? pos.get(a) : 1e6 + ids.indexOf(a);
+    const pb = pos.has(b) ? pos.get(b) : 1e6 + ids.indexOf(b);
+    return pa - pb;
+  });
+}
+function movePick(dayN, ids, id, dir){
+  const cur = applyOrder(dayN, ids).slice();
+  const i = cur.indexOf(id);
+  const j = i + dir;
+  if(i < 0 || j < 0 || j >= cur.length) return;
+  cur.splice(j, 0, cur.splice(i, 1)[0]);
+  ORDER[dayN] = cur;
+  saveOrder(); render();
+}
 function remove(id){ GONE.add(id); saveGone(); closeSheet(); render(); }
 function restore(id){ GONE.delete(id); saveGone(); closeSheet(); render(); }
 
@@ -508,7 +586,8 @@ function stopRow(s, idx){
   const chips = linked
     ? voteChips(linked).map(c => `<span class="vc ${c[0]}">${esc(c[1])}</span>`).join("")
     : "";
-  return `<div class="row ${cls}${sub}${anchored}">
+  const sh = markOf(s.id) ? " sh-" + markOf(s.id) : "";
+  return `<div class="row ${cls}${sub}${anchored}${sh}">
     <div class="rtop">
       <button class="rmain" data-stop="${esc(s.id)}">
         <span class="marker ${mk}">${glyph}</span>
@@ -522,12 +601,30 @@ function stopRow(s, idx){
       </button>
       <button class="rx" data-del="${esc(s.id)}" aria-label="Take off the board">✕</button>
     </div>
-    ${linkBar(s)}
+    ${rowFoot(s)}
   </div>`;
 }
 
 /* Inline search links. They need the internet, so they are plainly marked as
    search links and simply fail to load when there is no signal. */
+const MARKS = [["g","doing it"],["y","undecided"],["r","not keen"]];
+
+function markBar(id){
+  const cur = markOf(id);
+  return `<span class="mkbar">${
+    MARKS.map(([k,label]) =>
+      `<button class="mkbtn mk-${k}${cur===k?" on":""}" data-mark="${k}" data-mid="${esc(id)}"
+         aria-label="${esc(label)}" title="${esc(label)}"></button>`).join("")
+  }</span>`;
+}
+
+function moveBar(dayN, id){
+  return `<span class="mvbar">
+    <button class="mvbtn" data-move="up" data-mday="${dayN}" data-mid="${esc(id)}" aria-label="Move up">▲</button>
+    <button class="mvbtn" data-move="down" data-mday="${dayN}" data-mid="${esc(id)}" aria-label="Move down">▼</button>
+  </span>`;
+}
+
 function linkBar(it){
   const L = it.links || {};
   const out = [];
@@ -536,10 +633,15 @@ function linkBar(it){
   if(L.tiktok)    out.push(["TikTok", L.tiktok]);
   if(L.instagram) out.push(["Instagram", L.instagram]);
   if(L.youtube)   out.push(["YouTube", L.youtube]);
-  if(!out.length) return "";
-  return `<div class="rlinks">${
-    out.map(l => `<a href="${esc(l[1])}" target="_blank" rel="noopener">${esc(l[0])}</a>`).join("")
-  }</div>`;
+  return out.map(l =>
+    `<a href="${esc(l[1])}" target="_blank" rel="noopener">${esc(l[0])}</a>`).join("");
+}
+
+/* the strip under each row: shading, optional reorder, then the search links */
+function rowFoot(it, opts){
+  opts = opts || {};
+  const mv = opts.dayN ? moveBar(opts.dayN, it.id) : "";
+  return `<div class="rfoot">${markBar(it.id)}${mv}${linkBar(it)}</div>`;
 }
 
 function goneRow(item){
@@ -559,6 +661,32 @@ function goneSection(items){
     <div class="card">${list.map(goneRow).join("")}</div>`;
 }
 
+/* Which itinerary stop is this pick closest to, anywhere in the trip?
+   Answers "when does it make sense to do this" without opening anything. */
+const NEAREST_STOP = new Map();
+function nearestStop(p){
+  if(p.lat == null) return null;
+  if(NEAREST_STOP.has(p.id)) return NEAREST_STOP.get(p.id);
+  let best = null;
+  for(const d of DAYS){
+    for(const s of d.stops){
+      if(s.lat == null || s.kind === "note") continue;
+      if(s.poolkey && s.poolkey === p.key) continue;     // it IS this place
+      const m = metres(p, s);
+      if(m == null) continue;
+      if(!best || m < best.m) best = {m, name:s.name, day:d.n};
+    }
+  }
+  NEAREST_STOP.set(p.id, best);
+  return best;
+}
+function nearestStopLine(p){
+  const n = nearestStop(p);
+  if(!n) return "";
+  return `<span class="rnear">closest stop: <b>${esc(n.name)}</b>
+    <span class="dd">day ${n.day} · ${esc(travelLabel(n.m))} · ${esc(distLabel(n.m))}</span></span>`;
+}
+
 function pickRow(s, opts){
   opts = opts || {};
   const chips = voteChips(s).map(c => `<span class="vc ${c[0]}">${esc(c[1])}</span>`).join("");
@@ -568,7 +696,8 @@ function pickRow(s, opts){
     + (days.length ? `<span class="vc plan">listed day ${days.join(", ")}</span>` : "");
   const anchored = state.anchor && state.anchor.ref === s.id ? " anchored" : "";
   const meta = metaLine([s.area, s.city, s.cat], s.lat == null);
-  return `<div class="row${anchored}">
+  const sh = markOf(s.id) ? " sh-" + markOf(s.id) : "";
+  return `<div class="row${anchored}${sh}">
     <div class="rtop">
       <button class="rmain" data-pick="${esc(s.id)}">
         <span class="marker ${anchored?"me":markerClass(s)}">${anchored?"◉":"★"}</span>
@@ -576,16 +705,27 @@ function pickRow(s, opts){
           <span class="rname">${esc(s.name)}</span>
           <span class="rmeta">${esc(meta)}</span>
           <span class="chips">${chips}${onPlan}</span>
+          ${nearestStopLine(s)}
         </span>
         ${distCell(s)}
       </button>
       <button class="rx" data-del="${esc(s.id)}" aria-label="Take off the board">✕</button>
     </div>
-    ${linkBar(s)}
+    ${rowFoot(s, {dayN: opts.reorderDay})}
   </div>`;
 }
 
 /* ------------------------------------------------- PLAN */
+/* The pick ids currently on screen for a day, in the order they are shown. */
+function visiblePickIds(d){
+  const onPlanKeys = new Set(
+    livePlan(d).filter(s => s.poolkey && SPOT_BY_KEY.has(s.poolkey)).map(s => s.poolkey)
+  );
+  const live = (d.picks || []).map(id => SPOT_BY_ID.get(id)).filter(Boolean)
+    .filter(s => !onPlanKeys.has(s.key) && !isGone(s.id));
+  return applyOrder(d.n, live.map(s => s.id));
+}
+
 /* One day rendered the way the itinerary document lays it out: the plan in order,
    then that day's "Other yes / maybe" block in the document's own order. */
 function dayBlock(d, opts){
@@ -601,8 +741,10 @@ function dayBlock(d, opts){
   const allPicks = (d.picks || []).map(id => SPOT_BY_ID.get(id)).filter(Boolean)
     .filter(s => !onPlanKeys.has(s.key))
     .map(s => Object.assign({}, s, {_t:"pick"}));
-  let picks = allPicks.filter(s => !isGone(s.id));
-  if(state.anchor) picks = sortByAnchor(picks);
+  // manual order wins here; distance sorting lives in Nearby and in the cards
+  const live = allPicks.filter(s => !isGone(s.id));
+  const byId = new Map(live.map(s => [s.id, s]));
+  const picks = applyOrder(d.n, live.map(s => s.id)).map(id => byId.get(id)).filter(Boolean);
 
   const head = `
   <div class="card dayhead"><div class="pad">
@@ -624,7 +766,7 @@ function dayBlock(d, opts){
   const other = `
   <div class="sechead"><h2>Other yes / maybe</h2><span class="n">${picks.length}</span></div>
   <div class="card">${
-    picks.length ? picks.map(s => pickRow(s)).join("")
+    picks.length ? picks.map(s => pickRow(s, {reorderDay: d.n})).join("")
                  : `<div class="empty">Nothing else listed for this day.</div>`
   }</div>`;
 
@@ -639,7 +781,9 @@ function viewPlan(){
   <div class="foot">
     Walk times are straight-line distance padded 30% for real streets, at 80 m per minute.
     Treat them as a rough guide, not a route.<br>
-    Tap ✕ on anything you don't want. It stays in "Taken off" so you can put it back.
+    Shade a row green, amber or red as you go. ✕ still removes, and anything removed
+    waits in "Taken off".<br>
+    <a href="check-pins.html">Check where every pin came from</a>
   </div>`;
 }
 
@@ -909,7 +1053,8 @@ function viewMap(){
 
 /* ---------------------------------------------------------------- sheet */
 const sheet = document.getElementById("sheet"), scrim = document.getElementById("scrim");
-function closeSheet(){ sheet.classList.remove("on"); scrim.classList.remove("on"); }
+function closeSheet(){ sheet.classList.remove("on"); scrim.classList.remove("on");
+  state.openItem = null; state.nearCat = ""; }
 scrim.addEventListener("click", closeSheet);
 
 /* Everything on the board that has a pin: every yes/maybe plus every itinerary
@@ -947,10 +1092,31 @@ function nearestTo(it, n){
 
 function nearbyBlock(it){
   if(it.lat == null) return "";
-  const list = nearestTo(it, 12);
-  if(!list.length) return "";
+  let all = nearestTo(it, 400);
+  if(!all.length) return "";
+
+  // category chips, so "what food is near here" is one tap
+  const counts = new Map();
+  for(const {c} of all){
+    const k = (c.cat || "").trim();
+    if(k) counts.set(k, (counts.get(k) || 0) + 1);
+  }
+  const cats = [...counts.entries()].sort((a,b) => b[1]-a[1]).map(x => x[0]);
+  const sel = state.nearCat;
+  if(sel) all = all.filter(({c}) => (c.cat || "").trim() === sel);
+  const list = all.slice(0, 12);
+
+  const chips = `<div class="catchips">
+    <button class="cc${sel?"":" on"}" data-cat="">All</button>
+    ${cats.map(k => `<button class="cc${sel===k?" on":""}" data-cat="${esc(k)}">${esc(k)}</button>`).join("")}
+  </div>`;
+
+  if(!list.length) return `<div class="nearblk"><div class="cap">Closest to here</div>
+    ${chips}<div class="empty">Nothing of that type nearby.</div></div>`;
+
   return `<div class="nearblk">
     <div class="cap">Closest to here, nearest first</div>
+    ${chips}
     ${list.map(({m, c}) => {
       const isPick = c._t !== "stop";
       const chips = isPick
@@ -965,6 +1131,37 @@ function nearbyBlock(it){
         <span class="nd">${esc(travelLabel(m))}<i>${esc(distLabel(m))}</i></span>
       </button>`;
     }).join("")}
+  </div>`;
+}
+
+/* Where this pin came from and how much to trust it. No pin is "proven"; the
+   address below it is the evidence, and the Maps link checks it in one tap. */
+const GEO_SRC = {
+  "ROOFTOP":          ["Google geocoder, exact building", "high"],
+  "hand-fixed":       ["corrected by hand earlier", "high"],
+  "maps":             ["read off Google Maps", "high"],
+  "maps-area":        ["Google Maps, area level", "area"],
+  "GEOMETRIC_CENTER": ["Google geocoder, centre of a street or block", "area"],
+  "APPROXIMATE":      ["Google geocoder, approximate", "area"],
+  "partial":          ["planner sheet, confidence not recorded", "unknown"],
+  "osm":              ["OpenStreetMap lookup", "high"],
+  "sheet":            ["planner sheet", "unknown"],
+  "review":           ["flagged for review", "low"],
+  "failed":           ["could not be found", "none"],
+  "nopin":            ["deliberately not pinned", "none"],
+};
+function provBlock(it){
+  if(it.lat == null){
+    return `<div class="prov"><span class="warn">No map pin.</span>
+      This one could not be located, so it has no distance anywhere in the app.
+      Nothing has been guessed for it.</div>`;
+  }
+  const g = GEO_SRC[it.geo] || [it.geo || "unknown", "unknown"];
+  const warn = (g[1] === "area" || g[1] === "unknown" || g[1] === "low");
+  return `<div class="prov">
+    <b>Pin source:</b> ${esc(g[0])}${warn ? ` <span class="warn">(worth checking)</span>` : ""}<br>
+    <b>Coordinates:</b> ${it.lat.toFixed(5)}, ${it.lng.toFixed(5)}<br>
+    ${it.address ? `<b>Resolved address:</b> ${esc(it.address)}` : `<span class="warn">No address recorded.</span>`}
   </div>`;
 }
 
@@ -1021,7 +1218,7 @@ function openSheet(it, kind){
         ${it.lat != null ? `<div class="kvi"><div class="k">Coordinates</div>
           <div class="v" style="font-size:13px">${it.lat.toFixed(5)}, ${it.lng.toFixed(5)}</div></div>` : ""}
       </div>
-      ${it.address ? `<div class="addr">${esc(it.address)}</div>` : ""}
+      ${provBlock(it)}
       <div class="btns">
         ${it.lat != null ? `<button class="btn primary" id="setAnchor">◉ I'm here, measure from this</button>` : ""}
         ${isGone(it.id)
@@ -1037,7 +1234,8 @@ function openSheet(it, kind){
         ).join("")}</div>
       </div>` : ""}
     </div>`;
-  sheet.classList.add("on"); scrim.classList.add("on"); sheet.scrollTop = 0;
+  state.openItem = it;
+  sheet.classList.add("on"); scrim.classList.add("on");
 
   const sa = sheet.querySelector("#setAnchor");
   if(sa) sa.addEventListener("click", () => {
@@ -1107,6 +1305,24 @@ function render(){
 }
 
 document.addEventListener("click", e => {
+  const mk = e.target.closest("[data-mark]");
+  if(mk){ setMark(mk.dataset.mid, mk.dataset.mark); return; }
+
+  const mv = e.target.closest("[data-move]");
+  if(mv){
+    const dn = +mv.dataset.mday;
+    const d = DAYS.find(x => x.n === dn);
+    if(d) movePick(dn, visiblePickIds(d), mv.dataset.mid, mv.dataset.move === "up" ? -1 : 1);
+    return;
+  }
+
+  const cat = e.target.closest("[data-cat]");
+  if(cat){
+    state.nearCat = cat.dataset.cat || "";
+    if(state.openItem) openSheet(state.openItem);
+    return;
+  }
+
   const del = e.target.closest("[data-del]");
   if(del){ remove(del.dataset.del); return; }
   const res = e.target.closest("[data-restore]");
