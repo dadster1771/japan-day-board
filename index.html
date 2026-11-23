@@ -696,8 +696,23 @@ function goneSection(items){
 /* Which itinerary stop is this pick closest to, anywhere in the trip?
    Answers "when does it make sense to do this" without opening anything. */
 const NEAREST_STOP = new Map();
-const NEAR_MAX_MIN = 60;    // an hour out, past that it is a different day's problem
-const NEAR_SHOW = 4;
+const NEAR_MAX_MIN = 60;    // an hour ON FOOT. Anything you would take a train to is
+const NEAR_SHOW = 4;        // not "nearby" for the purpose of nipping somewhere else.
+
+/* travelLabel() says "train" past 2.5 km, which was leaking 3 km entries into these
+   lists reading as train rides. Here we only ever deal in walking. */
+function walkable(m){ return m != null && walkMin(m) <= NEAR_MAX_MIN; }
+function walkLabel(m){ return "~" + walkMin(m) + " min walk"; }
+
+/* The itinerary keeps its full wording so it stays searchable, but in a cramped
+   "closest stops" list the brackets are just noise. Strip them there only. */
+function shortName(n){
+  return String(n || "")
+    .replace(/\s*\([^)]*\)/g, "")      // (observation tower), (1h 10m), …
+    .replace(/\s*[-–—]\s*$/, "")
+    .replace(/\s{2,}/g, " ")
+    .trim() || String(n || "");
+}
 
 function nearestStops(p){
   if(p.lat == null) return [];
@@ -709,8 +724,8 @@ function nearestStops(p){
       if(st.poolkey && st.poolkey === p.key) continue;    // it IS this place
       const m = metres(p, st);
       if(m == null) continue;
-      if(walkMin(m) > NEAR_MAX_MIN) continue;             // too far to be useful
-      hits.push({m, name: st.name, day: d.n});
+      if(!walkable(m)) continue;                          // must be walkable, not a train
+      hits.push({m, name: shortName(st.name), day: d.n});
     }
   }
   hits.sort((a, b) => a.m - b.m);
@@ -727,7 +742,7 @@ function nearestStopLine(p){
     ${list.map((n, i) => `<span class="nr">
       <span class="ni">${i + 1}</span>
       <b>${esc(n.name)}</b>
-      <span class="dd">day ${n.day} · ${esc(travelLabel(n.m))} · ${esc(distLabel(n.m))}</span>
+      <span class="dd">day ${n.day} · ${esc(walkLabel(n.m))} · ${esc(distLabel(n.m))}</span>
     </span>`).join("")}
   </span>`;
 }
@@ -738,6 +753,7 @@ function pickRow(s, opts){
   const days = (opts.planDays || []).filter(n => n !== s._today);
   const onPlan =
       (s._today ? `<span class="vc plan">on today's plan</span>` : "")
+    + (s._walk != null ? `<span class="vc flat">${esc(walkLabel(s._walk))} from today</span>` : "")
     + (days.length ? `<span class="vc plan">listed day ${days.join(", ")}</span>` : "");
   const anchored = state.anchor && state.anchor.ref === s.id ? " anchored" : "";
   const meta = metaLine([s.area, s.city, s.cat], s.lat == null);
@@ -764,18 +780,53 @@ function pickRow(s, opts){
 }
 
 /* ------------------------------------------------- PLAN */
+
+/* The picks that belong to a day: the ones the document listed there, plus
+   anything within an hour's WALK of that day's route. The same spot can appear on
+   several days, which is the point. One source of truth, so the drag handler
+   reorders exactly the list you can see. */
+function dayPickList(d){
+  const all = planItems(d);
+  const live = all.filter(s => !isGone(s.id));
+  const onPlanKeys = new Set(
+    live.filter(s => s.poolkey && SPOT_BY_KEY.has(s.poolkey)).map(s => s.poolkey)
+  );
+
+  const docIds = new Set(d.picks || []);
+  const docPicks = (d.picks || []).map(id => SPOT_BY_ID.get(id)).filter(Boolean)
+    .filter(s => !onPlanKeys.has(s.key))
+    .map(s => Object.assign({}, s, {_t:"pick"}));
+
+  const dayStops = live.filter(s => s.lat != null && s.kind !== "note");
+  const extra = [];
+  for(const p of pickItems()){
+    if(docIds.has(p.id) || onPlanKeys.has(p.key) || p.lat == null) continue;
+    let best = Infinity;
+    for(const st of dayStops){
+      const m = metres(p, st);
+      if(m != null && m < best) best = m;
+    }
+    if(walkable(best)) extra.push(Object.assign({}, p, {_t:"pick", _walk:best}));
+  }
+  extra.sort((a, b) => a._walk - b._walk);
+
+  const every = docPicks.concat(extra);
+  const shown = every.filter(s => !isGone(s.id));
+  const byId = new Map(shown.map(s => [s.id, s]));
+  return {
+    onPlanKeys: onPlanKeys,
+    all: every,
+    ordered: applyOrder(d.n, shown.map(s => s.id)).map(id => byId.get(id)).filter(Boolean),
+  };
+}
+
 /* The pick ids currently on screen for a day, in the order they are shown. */
 function visiblePickIds(d){
-  const onPlanKeys = new Set(
-    livePlan(d).filter(s => s.poolkey && SPOT_BY_KEY.has(s.poolkey)).map(s => s.poolkey)
-  );
-  const live = (d.picks || []).map(id => SPOT_BY_ID.get(id)).filter(Boolean)
-    .filter(s => !onPlanKeys.has(s.key) && !isGone(s.id));
-  return applyOrder(d.n, live.map(s => s.id));
+  return dayPickList(d).ordered.map(s => s.id);
 }
 
 /* One day rendered the way the itinerary document lays it out: the plan in order,
-   then that day's "Other yes / maybe" block in the document's own order. */
+   then that day's "Other yes / maybe" block. */
 function dayBlock(d, opts){
   opts = opts || {};
   const h = hotelFor(d);
@@ -783,16 +834,8 @@ function dayBlock(d, opts){
   const items = all.filter(s => !isGone(s.id));
   let n = 0;
 
-  const onPlanKeys = new Set(
-    items.filter(s => s.poolkey && SPOT_BY_KEY.has(s.poolkey)).map(s => s.poolkey)
-  );
-  const allPicks = (d.picks || []).map(id => SPOT_BY_ID.get(id)).filter(Boolean)
-    .filter(s => !onPlanKeys.has(s.key))
-    .map(s => Object.assign({}, s, {_t:"pick"}));
-  // manual order wins here; distance sorting lives in Nearby and in the cards
-  const live = allPicks.filter(s => !isGone(s.id));
-  const byId = new Map(live.map(s => [s.id, s]));
-  const picks = applyOrder(d.n, live.map(s => s.id)).map(id => byId.get(id)).filter(Boolean);
+  const pl = dayPickList(d);
+  const picks = pl.ordered;
 
   const head = `
   <div class="card dayhead"><div class="pad">
@@ -815,10 +858,10 @@ function dayBlock(d, opts){
   <div class="sechead"><h2>Other yes / maybe</h2><span class="n">${picks.length}</span></div>
   <div class="card">${
     picks.length ? picks.map(s => pickRow(s, {reorderDay: d.n})).join("")
-                 : `<div class="empty">Nothing else listed for this day.</div>`
+                 : `<div class="empty">Nothing within an hour's walk of this day.</div>`
   }</div>`;
 
-  const gone = goneSection(all.concat(allPicks));
+  const gone = goneSection(all.concat(pl.all));
 
   return head + (opts.anchor === false ? "" : anchorCard()) + plan + other + gone;
 }
